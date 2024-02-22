@@ -8,7 +8,90 @@ output:
 
 ## Loading and preprocessing the data
 
+First of all, we download and unzip the data, in case the data set is not 
+already available in the working directory.
 
+```{r}
+if (!file.exists("activity.zip")) {
+        urlData <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip";
+        download.file(url = urlData, destfile = "activity.zip");
+}
+
+if (!file.exists("activity.csv")) {
+        unzip("activity.zip")
+}
+```
+
+Then, before loading the whole data set with `read.csv()`, we give a quick look at its heading:
+
+```{r}
+read.csv("activity.csv", nrows=14)
+```
+
+We observe that :
+
+- the columns have headings;
+- the first column, "steps", comes from a counting variable, hence shall contain only integers;
+- the second column, "date", shall contain the dates of the measurements in the format YYYY-MM-DD;
+- the third column, "interval", shall contain the identifier for the 5-minute interval in which measurement was taken, which is an integer between 0 and 2400 of the form hhmm.
+
+Therefore, we can specify a few arguments to make the procedure faster:
+
+```{r summary}
+rawData <- read.csv("activity.csv",
+                    header = TRUE,
+                    colClasses = c("numeric", "character", "numeric"))
+summary(rawData)
+```
+
+Our initial observations are confirmed by:
+
+```{r, results = "hide"}
+identical(rawData$steps, as.numeric(as.integer(rawData$steps)))
+identical(rawData$interval, as.numeric(as.integer(rawData$interval)))
+```
+
+Therefore, we can convert the columns into a more convenient format:
+
+```{r}
+rawData$steps <- as.integer(rawData$steps)
+rawData$date <- as.Date(rawData$date, format = "%Y-%m-%d")
+rawData$interval <- as.integer(rawData$interval)
+```
+
+Recall that the summary tells that we have 2304 NA under the "steps" variable.  That is to say:  
+
+```{r} 
+sum(is.na(rawData$steps))/nrow(rawData)
+```
+
+around 13% of the total observations.
+
+A second look at the data leads to conjecture that NAs are concentrated in days without observations. Let us check:
+
+```{r}
+byDay <- aggregate(steps ~ date, 
+                   data = rawData, 
+                   FUN = function(X) { sum(is.na(X)) }, 
+                   na.action = na.pass)
+names(byDay) <- c("date","NAs")
+byDay[byDay$NAs != 0,]
+```
+
+The conjecture was true. Moreover, we conclude that there are 8 days without observations:
+
+```{r} 
+sum(byDay$NAs != 0)
+```
+
+
+For the moment, we ignore them and we promote "rawData" to our tidy "data" set:
+
+```{r}
+data <- rawData
+```
+
+Now, we are ready to begin our analysis.
 
 ## What is mean total number of steps taken per day?
 
