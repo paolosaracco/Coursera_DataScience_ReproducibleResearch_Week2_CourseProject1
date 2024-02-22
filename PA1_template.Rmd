@@ -11,7 +11,7 @@ output:
 First of all, we download and unzip the data, in case the data set is not 
 already available in the working directory.
 
-```{r}
+```{r download}
 if (!file.exists("activity.zip")) {
         urlData <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip";
         download.file(url = urlData, destfile = "activity.zip");
@@ -24,7 +24,7 @@ if (!file.exists("activity.csv")) {
 
 Then, before loading the whole data set with `read.csv()`, we give a quick look at its heading:
 
-```{r}
+```{r read}
 read.csv("activity.csv", nrows=14)
 ```
 
@@ -46,14 +46,14 @@ summary(rawData)
 
 Our initial observations are confirmed by:
 
-```{r, results = "hide"}
+```{r integers, results = "hide"}
 identical(rawData$steps, as.numeric(as.integer(rawData$steps)))
 identical(rawData$interval, as.numeric(as.integer(rawData$interval)))
 ```
 
 Therefore, we can convert the columns into a more convenient format:
 
-```{r}
+```{r reformat}
 rawData$steps <- as.integer(rawData$steps)
 rawData$date <- as.Date(rawData$date, format = "%Y-%m-%d")
 rawData$interval <- as.integer(rawData$interval)
@@ -61,7 +61,7 @@ rawData$interval <- as.integer(rawData$interval)
 
 Recall that the summary tells that we have 2304 NA under the "steps" variable.  That is to say:  
 
-```{r} 
+```{r proportion} 
 sum(is.na(rawData$steps))/nrow(rawData)
 ```
 
@@ -69,7 +69,7 @@ around 13% of the total observations.
 
 A second look at the data leads to conjecture that NAs are concentrated in days without observations. Let us check:
 
-```{r}
+```{r NAs}
 byDay <- aggregate(steps ~ date, 
                    data = rawData, 
                    FUN = function(X) { sum(is.na(X)) }, 
@@ -80,14 +80,14 @@ byDay[byDay$NAs != 0,]
 
 The conjecture was true. Moreover, we conclude that there are 8 days without observations:
 
-```{r} 
+```{r NAdays} 
 sum(byDay$NAs != 0)
 ```
 
 
 For the moment, we ignore them and we promote "rawData" to our tidy "data" set:
 
-```{r}
+```{r data}
 data <- rawData
 ```
 
@@ -95,11 +95,86 @@ Now, we are ready to begin our analysis.
 
 ## What is mean total number of steps taken per day?
 
+We start by calculating the total number of steps taken per day and I choose to keep track of the NAs:
 
+```{r daySteps}
+daySteps <- aggregate(steps ~ date, 
+                      data = data, 
+                      sum, 
+                      na.action = na.pass)
+```
+
+Then, we plot an histogram of the result:
+
+```{r histogram}
+hist(daySteps$steps,
+     main = "Total number of steps per day",
+     xlab = "Number of steps",
+     ylim = c(0,40),
+     col = "Steelblue")
+```
+
+from which we can already guess that the mean and median of the total number of steps are going to lay between 10000 and 15000. The result is confirmed by:
+
+```{r mean-median}
+mean(daySteps$steps, na.rm = TRUE)
+median(daySteps$steps, na.rm = TRUE)
+```
 
 ## What is the average daily activity pattern?
 
+In order to analyse the average daily activity pattern, we first compute the average number of steps per 5-minute interval, this time omitting the NAs:
 
+```{r averageSteps}
+intervalSteps <- aggregate(steps ~ interval, 
+                           data = data, 
+                           mean, 
+                           na.action = na.omit)
+```
+
+and we make a time series plot of the result:
+
+```{r timeseries}
+with(intervalSteps,
+     plot(interval, steps,
+          type = "l",
+          xlab = "",
+          ylab = "",
+          xaxt = "n"))
+axis(side = 1,
+     at = seq(0,2400,length.out = 7),
+     labels = c("00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"))
+title(main = "Time series of the average steps per 5-minute interval",
+      xlab = "Time",
+      ylab = "Steps")
+```
+
+We immediately notice that there is a peak in the activity around 8am. To find the exact interval, we introduce a function to convert the identifier of the interval into a human readable time
+
+```{r int_to_time}
+int_to_time <- function(X) {
+        # takes an integer hhmm between 0 and 2400 and converts it into "hh:mm"
+        hh <- as.integer(X/100)
+        mm <- X-as.integer(X/100)*100
+        if (mm %in% 0:9) {
+                return(paste(hh,":0", mm, sep = ""));
+        }
+        else if (mm %in% 10:59) {
+                return(paste(hh,":", mm, sep = ""));
+        }
+        else print("Input is not an integer between 0 and 2400")
+}
+```
+
+then we compute the index of the maximum and so the interval of time:
+
+```{r max}
+i_max <- which.max(intervalSteps$steps)
+cat(int_to_time(intervalSteps$interval[i_max]),
+    "-",
+    int_to_time(intervalSteps$interval[i_max+1]),
+    sep = " ")
+```
 
 ## Imputing missing values
 
