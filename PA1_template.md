@@ -5,6 +5,7 @@ output:
     keep_md: true
 ---
 
+**Note of the author**: this document has been written directly in R Studio as a R Markdown file and knitted from there (and not from console).
 
 ## Loading and preprocessing the data {#preprocess}
 
