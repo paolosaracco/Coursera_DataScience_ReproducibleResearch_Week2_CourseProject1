@@ -6,7 +6,7 @@ output:
 ---
 
 
-## Loading and preprocessing the data
+## Loading and preprocessing the data {#preprocess}
 
 First of all, we download and unzip the data, in case the data set is not 
 already available in the working directory.
@@ -107,6 +107,7 @@ daySteps <- aggregate(steps ~ date,
 Then, we plot an histogram of the result:
 
 ```{r histogram}
+# the ylim parameter is settled in order to make the histogram easily comparable with the one after imputing
 hist(daySteps$steps,
      main = "Total number of steps per day",
      xlab = "Number of steps",
@@ -146,7 +147,7 @@ axis(side = 1,
      labels = c("00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "24:00"))
 title(main = "Time series of the average steps per 5-minute interval",
       xlab = "Time",
-      ylab = "Steps")
+      ylab = "Average number of steps")
 ```
 
 We immediately notice that there is a peak in the activity around 8am. To find the exact interval, we introduce a function to convert the identifier of the interval into a human readable time
@@ -178,6 +179,83 @@ cat(int_to_time(intervalSteps$interval[i_max]),
 
 ## Imputing missing values
 
+Now it is time to deal with the missing values. There are
 
+```{r NAcount}
+sum(is.na(data$steps))
+```
+
+missing values, distributed as we observed in [the first section](#preprocess). In view of what we observed there, to fill in the NAs I decide to impute the missing data by using the average of the ones from the same interval in the other days, taking advantage fo the fact that R recycles vectors.
+Even if this breaks the coherence, I do not truncate the average to obtain an integer.
+
+```{r imputeData}
+imputed_data <- data
+imputed_data[is.na(data$steps),"steps"] <- intervalSteps$steps
+```
+
+To see the impact of imputing missing data on our estimates, let us plot the histogram of the total number of steps per day again:
+
+```{r imputedHistogram, message = FALSE}
+# this time I decide to use dplyr, for the sake of elegancy
+library(dplyr)
+
+imputed_daySteps <- imputed_data %>%
+        as_tibble %>%
+        group_by(date) %>%
+        summarise(steps = sum(steps))
+
+hist(imputed_daySteps$steps,
+     main = "Total number of steps per day\nafter imputing",
+     xlab = "Number of steps",
+     ylim = c(0,40),
+     col = "Steelblue")
+```
+
+and we may compare it with our first histogram: the peak is 8 points higher. As we expect, the mean does not change (this can be checked directly with a few algebraic manipulations) while the median does and becomes equal to the mean.
+
+```{r imputedMeanMedian}
+# the mean does not change (this is math), while the median does
+mean(imputed_daySteps$steps)
+median(imputed_daySteps$steps)
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+Let us add a factor variable "weekpart" to our imputed data set, to keep track of whether the data come from a weekday or not:
+
+```{r weekparts}
+weekend <- c("Saturday", "Sunday")
+imputed_data$weekpart <- as.factor(
+        if_else(weekdays(imputed_data$date) %in% weekend,
+                "weekend",
+                "weekday")
+        )
+```
+
+Then, let us plot again the time series, but now separated between weekdays and weekends.
+
+```{r imputedTimeSeries, message = FALSE}
+# for the sake of elegance, I will use the lattice package
+library(lattice)
+library(dplyr)
+
+weekpartSteps <- imputed_data %>%
+        group_by(weekpart,interval) %>%
+        summarise(steps = mean(steps))
+
+xyplot(steps ~ interval | weekpart, 
+       data = weekpartSteps, 
+       type = "l", 
+       layout = c(1,2),
+       main = "Time series of the average steps per weekpart",
+       xlab = "Interval",
+       ylab = "Average number of steps",
+       scales = list(x = list(at = seq(0,2400,length.out = 7),
+                              labels = c("00:00", "04:00", "08:00", "12:00", 
+                                         "16:00", "20:00", "24:00")
+                              )
+                     )
+       )
+```
+
+Thus we can conclude that there is a difference in activity patterns between weekdays and weekends: weekdays begin earlier and are more sedentary than weekends.
